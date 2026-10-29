@@ -29,7 +29,18 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/mirror_key
           chmod 600 ~/.ssh/mirror_key
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o StrictHostKeyChecking=accept-new"
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
           git remote add mirror git@github.com:Undin/repo-mirroring-test-mirror.git
-          git push mirror refs/remotes/origin/main:refs/heads/main
+
+          echo "::group::Diagnostics"
+          git --version
+          git config --show-origin --list
+          git remote -v
+          git remote get-url --push mirror
+          env | grep -E '^(GIT_|SSH_)' | grep -v SSH_KEY || true
+          ls -la ~/.ssh
+          $GIT_SSH_COMMAND -T git@github.com || true
+          echo "::endgroup::"
+
+          GIT_TRACE=1 GIT_SSH_COMMAND="$GIT_SSH_COMMAND -v" git push mirror refs/remotes/origin/main:refs/heads/main
           git push mirror --tags

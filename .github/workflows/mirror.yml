@@ -1,0 +1,32 @@
+name: Mirror
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    # The workflow file is mirrored too, so don't run it in the mirror repository
+    if: github.repository == 'Undin/repo-mirroring-test-main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to mirror repository
+        env:
+          SSH_KEY: ${{ secrets.MIRROR_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/mirror_key
+          chmod 600 ~/.ssh/mirror_key
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o StrictHostKeyChecking=accept-new"
+          git remote add mirror git@github.com:Undin/repo-mirroring-test-mirror.git
+          git push mirror refs/remotes/origin/main:refs/heads/main
+          git push mirror --tags

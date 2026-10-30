@@ -18,29 +18,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Otherwise checkout rewrites SSH remotes to HTTPS with GITHUB_TOKEN,
-          # which can't push to another repository
+          # Don't leave GITHUB_TOKEN in git config, the mirror is pushed with the app token
           persist-credentials: false
+
+      # Deploy keys can't push changes in `.github/workflows`, so push with a GitHub App token
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ vars.MIRROR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.MIRROR_APP_PRIVATE_KEY }}
+          repositories: repo-mirroring-test-mirror
+          permission-contents: write
+          permission-workflows: write
 
       - name: Push to mirror repository
         env:
-          SSH_KEY: ${{ secrets.MIRROR_SSH_KEY }}
+          TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/mirror_key
-          chmod 600 ~/.ssh/mirror_key
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
-          git remote add mirror git@github.com:Undin/repo-mirroring-test-mirror.git
-
-          echo "::group::Diagnostics"
-          git --version
-          git config --show-origin --list
-          git remote -v
-          git remote get-url --push mirror
-          env | grep -E '^(GIT_|SSH_)' | grep -v SSH_KEY || true
-          ls -la ~/.ssh
-          $GIT_SSH_COMMAND -T git@github.com || true
-          echo "::endgroup::"
-
-          GIT_TRACE=1 GIT_SSH_COMMAND="$GIT_SSH_COMMAND -v" git push mirror refs/remotes/origin/main:refs/heads/main
+          git remote add mirror "https://x-access-token:${TOKEN}@github.com/Undin/repo-mirroring-test-mirror.git"
+          git push mirror refs/remotes/origin/main:refs/heads/main
           git push mirror --tags
